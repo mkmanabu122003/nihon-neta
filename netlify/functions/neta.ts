@@ -59,7 +59,7 @@ const transformToNeta = async (articles: NewsDataArticle[]): Promise<{ netas: Ne
   }
 
   const genAI = new GoogleGenerativeAI(geminiApiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
   const netas: Neta[] = [];
   const errors: string[] = [];
