@@ -32,12 +32,12 @@ interface Neta {
   relatedAreas: string[];
 }
 
-// 日本関連ニュースのRSSフィード（複数ソース対応）
+// nippon.com RSSフィード
 const RSS_FEEDS: Record<string, { url: string; name: string }> = {
-  '': { url: 'https://japantoday.com/feed', name: 'Japan Today' },
-  'japan-today': { url: 'https://japantoday.com/feed', name: 'Japan Today' },
-  'japan-times': { url: 'https://www.japantimes.co.jp/feed/', name: 'Japan Times' },
-  'nhk': { url: 'https://www3.nhk.or.jp/rss/news/cat0.xml', name: 'NHK' },
+  '': { url: 'https://www.nippon.com/ja/rss-others/news.xml', name: 'nippon.com ニュース' },
+  'news': { url: 'https://www.nippon.com/ja/rss-others/news.xml', name: 'nippon.com ニュース' },
+  'guide': { url: 'https://www.nippon.com/ja/rss-others/guide-to-japan.xml', name: 'nippon.com Guide To Japan' },
+  'video': { url: 'https://www.nippon.com/ja/rss-others/japan-video.xml', name: 'nippon.com Japan Video' },
 };
 
 interface FetchParams {

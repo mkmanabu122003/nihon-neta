@@ -11,12 +11,12 @@ interface DebugInfo {
   timestamp: string;
 }
 
-// ニュースソース
-const SOURCES = [
-  { value: '', label: 'Japan Today' },
-  { value: 'japan-today', label: 'Japan Today' },
-  { value: 'japan-times', label: 'Japan Times' },
-  { value: 'nhk', label: 'NHK' },
+// nippon.com カテゴリ
+const CATEGORIES = [
+  { value: '', label: 'ニュース' },
+  { value: 'news', label: 'ニュース' },
+  { value: 'guide', label: 'Guide To Japan' },
+  { value: 'video', label: 'Japan Video' },
 ];
 
 export default function Home() {
@@ -26,14 +26,14 @@ export default function Home() {
   const [debug, setDebug] = useState<DebugInfo | null>(null);
 
   // Filter states
-  const [source, setSource] = useState('');
+  const [category, setCategory] = useState('');
 
   const fetchNetas = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (source) params.append('category', source);
+      if (category) params.append('category', category);
 
       const response = await fetch(`/api/neta?${params.toString()}`);
       const data = await response.json();
@@ -49,7 +49,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [source]);
+  }, [category]);
 
   useEffect(() => {
     fetchNetas();
@@ -79,16 +79,16 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Source Select */}
+            {/* Category Select */}
             <div className="flex items-center gap-2">
               <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-white"
               >
-                {SOURCES.map((src) => (
-                  <option key={src.value} value={src.value}>
-                    {src.label}
+                {CATEGORIES.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
                   </option>
                 ))}
               </select>
@@ -104,7 +104,7 @@ export default function Home() {
             今日の話のネタ
           </h2>
           <p className="text-gray-600 text-sm">
-            日本のニュースから英会話のネタを生成
+            nippon.com の記事から英会話のネタを生成
           </p>
         </div>
 
@@ -148,7 +148,7 @@ export default function Home() {
                   </svg>
                 </div>
                 <p className="text-gray-500 mb-2">ニュースが見つかりませんでした</p>
-                <p className="text-gray-400 text-sm mb-4">別のソースを選択してみてください</p>
+                <p className="text-gray-400 text-sm mb-4">別のカテゴリを選択してみてください</p>
                 {debug && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left text-sm max-w-md mx-auto">
                     <p className="font-semibold text-yellow-800 mb-2">Debug Info:</p>
@@ -171,7 +171,7 @@ export default function Home() {
             NihonNeta - 日本のニュースで英会話力アップ
           </p>
           <p className="text-xs text-gray-400 mt-1">
-            Powered by Japan Today, Japan Times, NHK
+            Powered by <a href="https://www.nippon.com" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-500">nippon.com</a>
           </p>
         </div>
       </footer>
