@@ -36,8 +36,8 @@ const fetchNews = async (): Promise<{ articles: NewsDataArticle[]; debug: string
     return { articles: [], debug: 'NEWSDATA_API_KEY is not configured' };
   }
 
-  // 日本関連のニュースに絞り込み
-  const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&q=Japan&language=en&size=5`;
+  // 日本関連のニュースに絞り込み（3件に制限）
+  const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&q=Japan&language=en&size=3`;
 
   try {
     const response = await fetch(url);
@@ -57,25 +57,11 @@ const fetchNews = async (): Promise<{ articles: NewsDataArticle[]; debug: string
   }
 };
 
-const transformToNeta = async (articles: NewsDataArticle[]): Promise<{ netas: Neta[]; debug: string }> => {
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (!geminiApiKey) {
-    return { netas: [], debug: 'GEMINI_API_KEY is not configured' };
-  }
-
-  if (articles.length === 0) {
-    return { netas: [], debug: 'No articles to transform' };
-  }
-
-  const genAI = new GoogleGenerativeAI(geminiApiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-  const netas: Neta[] = [];
-  const errors: string[] = [];
-
-  for (const article of articles) {
-    try {
-      const prompt = `You are helping Japanese people discuss Japan-related news in English with foreigners. Given this news article about Japan, create a comprehensive conversation guide.
+const processArticle = async (
+  article: NewsDataArticle,
+  model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>
+): Promise<Neta | null> => {
+  const prompt = `You are helping Japanese people discuss Japan-related news in English with foreigners. Given this news article about Japan, create a comprehensive conversation guide.
 
 Article Title: ${article.title}
 Description: ${article.description || 'No description available'}
@@ -116,44 +102,66 @@ Create a detailed guide in JSON format only (no markdown, no code blocks):
   "relatedAreas": ["3-5 related tourist spots or areas in Japan"]
 }`;
 
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.text();
+  try {
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
 
-      // Remove potential markdown code blocks
-      let jsonText = text.trim();
-      if (jsonText.startsWith('```')) {
-        jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-      }
-
-      const parsed = JSON.parse(jsonText);
-      netas.push({
-        id: article.article_id,
-        title: article.title,
-        sourceUrl: article.link,
-        publishedAt: article.pubDate,
-        category: parsed.category || article.category?.[0] || 'general',
-        difficulty: parsed.difficulty || 2,
-        casualPhrases: parsed.casualPhrases || [],
-        expandingQuestions: parsed.expandingQuestions || [],
-        thirtySecondExplanation: parsed.thirtySecondExplanation || '',
-        whyExplanation: parsed.whyExplanation || '',
-        foreignerAnalogies: parsed.foreignerAnalogies || [],
-        talkingHooks: parsed.talkingHooks || [],
-        numberFacts: parsed.numberFacts || [],
-        practicalQA: parsed.practicalQA || [],
-        culturalQA: parsed.culturalQA || [],
-        deepDiveQA: parsed.deepDiveQA || [],
-        relatedAreas: parsed.relatedAreas || [],
-      });
-    } catch (error) {
-      errors.push(`${article.title}: ${error instanceof Error ? error.message : String(error)}`);
+    // Remove potential markdown code blocks
+    let jsonText = text.trim();
+    if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
+
+    const parsed = JSON.parse(jsonText);
+    return {
+      id: article.article_id,
+      title: article.title,
+      sourceUrl: article.link,
+      publishedAt: article.pubDate,
+      category: parsed.category || article.category?.[0] || 'general',
+      difficulty: parsed.difficulty || 2,
+      casualPhrases: parsed.casualPhrases || [],
+      expandingQuestions: parsed.expandingQuestions || [],
+      thirtySecondExplanation: parsed.thirtySecondExplanation || '',
+      whyExplanation: parsed.whyExplanation || '',
+      foreignerAnalogies: parsed.foreignerAnalogies || [],
+      talkingHooks: parsed.talkingHooks || [],
+      numberFacts: parsed.numberFacts || [],
+      practicalQA: parsed.practicalQA || [],
+      culturalQA: parsed.culturalQA || [],
+      deepDiveQA: parsed.deepDiveQA || [],
+      relatedAreas: parsed.relatedAreas || [],
+    };
+  } catch {
+    return null;
   }
+};
+
+const transformToNeta = async (articles: NewsDataArticle[]): Promise<{ netas: Neta[]; debug: string }> => {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) {
+    return { netas: [], debug: 'GEMINI_API_KEY is not configured' };
+  }
+
+  if (articles.length === 0) {
+    return { netas: [], debug: 'No articles to transform' };
+  }
+
+  const genAI = new GoogleGenerativeAI(geminiApiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+  // 並列処理で高速化
+  const results = await Promise.all(
+    articles.map(article => processArticle(article, model))
+  );
+
+  const netas = results.filter((n): n is Neta => n !== null);
+  const errorCount = results.filter(n => n === null).length;
 
   return {
     netas,
-    debug: `Processed ${netas.length}/${articles.length} articles. ${errors.length > 0 ? 'Errors: ' + errors.join('; ') : ''}`
+    debug: `Processed ${netas.length}/${articles.length} articles.${errorCount > 0 ? ` ${errorCount} failed.` : ''}`
   };
 };
 

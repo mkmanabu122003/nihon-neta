@@ -10,6 +10,9 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."neta"]
+  timeout = 60
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
