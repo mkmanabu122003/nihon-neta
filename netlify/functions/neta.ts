@@ -32,31 +32,35 @@ interface Neta {
   relatedAreas: string[];
 }
 
-// nippon.com のカテゴリ別RSSフィードURL
-const RSS_FEEDS: Record<string, string> = {
-  '': 'https://www.nippon.com/en/rss/index.xml', // すべて
-  'news': 'https://www.nippon.com/en/rss/news.xml',
-  'guide': 'https://www.nippon.com/en/rss/guide-to-japan.xml',
-  'japan-data': 'https://www.nippon.com/en/rss/japan-data.xml',
-  'japan-topics': 'https://www.nippon.com/en/rss/japan-topics.xml',
-  'in-depth': 'https://www.nippon.com/en/rss/in-depth.xml',
+// 日本関連ニュースのRSSフィード（複数ソース対応）
+const RSS_FEEDS: Record<string, { url: string; name: string }> = {
+  '': { url: 'https://japantoday.com/feed', name: 'Japan Today' },
+  'japan-today': { url: 'https://japantoday.com/feed', name: 'Japan Today' },
+  'japan-times': { url: 'https://www.japantimes.co.jp/feed/', name: 'Japan Times' },
+  'nhk': { url: 'https://www3.nhk.or.jp/rss/news/cat0.xml', name: 'NHK' },
 };
 
 interface FetchParams {
   category?: string;
 }
 
-const fetchFromRSS = async (params: FetchParams): Promise<{ articles: RSSItem[]; debug: string }> => {
-  const parser = new Parser();
+const fetchFromRSS = async (params: FetchParams): Promise<{ articles: RSSItem[]; debug: string; source: string }> => {
+  const parser = new Parser({
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; NihonNeta/1.0)',
+    },
+  });
 
-  // カテゴリに応じたフィードURLを選択
-  const feedUrl = RSS_FEEDS[params.category || ''] || RSS_FEEDS[''];
+  // カテゴリに応じたフィードを選択
+  const feedConfig = RSS_FEEDS[params.category || ''] || RSS_FEEDS[''];
+  const feedUrl = feedConfig.url;
+  const sourceName = feedConfig.name;
 
   try {
     const feed = await parser.parseURL(feedUrl);
 
     if (!feed.items || feed.items.length === 0) {
-      return { articles: [], debug: `RSS returned no items from: ${feedUrl}` };
+      return { articles: [], debug: `RSS returned no items from: ${feedUrl}`, source: sourceName };
     }
 
     // 最新3件を取得
@@ -72,12 +76,14 @@ const fetchFromRSS = async (params: FetchParams): Promise<{ articles: RSSItem[];
 
     return {
       articles,
-      debug: `Found ${articles.length} articles from nippon.com (${params.category || 'all'})`
+      debug: `Found ${articles.length} articles from ${sourceName}`,
+      source: sourceName,
     };
   } catch (error) {
     return {
       articles: [],
-      debug: `RSS fetch error: ${error instanceof Error ? error.message : String(error)}`
+      debug: `RSS fetch error from ${sourceName}: ${error instanceof Error ? error.message : String(error)}`,
+      source: sourceName,
     };
   }
 };
@@ -209,7 +215,7 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({
         netas: netaResult.netas,
         debug: {
-          source: 'nippon.com RSS',
+          source: rssResult.source,
           news: rssResult.debug,
           transform: netaResult.debug,
           timestamp: new Date().toISOString(),
