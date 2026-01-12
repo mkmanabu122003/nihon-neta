@@ -1,13 +1,15 @@
 import { Handler } from '@netlify/functions';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Parser from 'rss-parser';
 
-interface NewsDataArticle {
-  article_id: string;
-  title: string;
-  link: string;
-  description: string;
-  pubDate: string;
-  category: string[];
+interface RSSItem {
+  title?: string;
+  link?: string;
+  pubDate?: string;
+  content?: string;
+  contentSnippet?: string;
+  guid?: string;
+  categories?: string[];
 }
 
 interface Neta {
@@ -30,61 +32,64 @@ interface Neta {
   relatedAreas: string[];
 }
 
+// nippon.com のカテゴリ別RSSフィードURL
+const RSS_FEEDS: Record<string, string> = {
+  '': 'https://www.nippon.com/en/rss/index.xml', // すべて
+  'news': 'https://www.nippon.com/en/rss/news.xml',
+  'guide': 'https://www.nippon.com/en/rss/guide-to-japan.xml',
+  'japan-data': 'https://www.nippon.com/en/rss/japan-data.xml',
+  'japan-topics': 'https://www.nippon.com/en/rss/japan-topics.xml',
+  'in-depth': 'https://www.nippon.com/en/rss/in-depth.xml',
+};
+
 interface FetchParams {
-  keyword?: string;
   category?: string;
 }
 
-const fetchNews = async (params: FetchParams): Promise<{ articles: NewsDataArticle[]; debug: string }> => {
-  const apiKey = process.env.NEWSDATA_API_KEY;
-  if (!apiKey) {
-    return { articles: [], debug: 'NEWSDATA_API_KEY is not configured' };
-  }
+const fetchFromRSS = async (params: FetchParams): Promise<{ articles: RSSItem[]; debug: string }> => {
+  const parser = new Parser();
 
-  // URLパラメータを構築
-  const urlParams = new URLSearchParams({
-    apikey: apiKey,
-    language: 'en',
-    size: '3',
-  });
-
-  // キーワード検索（デフォルトはJapan）
-  const keyword = params.keyword || 'Japan';
-  urlParams.append('q', keyword);
-
-  // カテゴリフィルター（NewsData.ioのカテゴリ）
-  if (params.category) {
-    urlParams.append('category', params.category);
-  }
-
-  const url = `https://newsdata.io/api/1/latest?${urlParams.toString()}`;
+  // カテゴリに応じたフィードURLを選択
+  const feedUrl = RSS_FEEDS[params.category || ''] || RSS_FEEDS[''];
 
   try {
-    const response = await fetch(url);
-    const data = await response.json();
+    const feed = await parser.parseURL(feedUrl);
 
-    if (!response.ok) {
-      return { articles: [], debug: `NewsData API error: ${response.status} - ${JSON.stringify(data)}` };
+    if (!feed.items || feed.items.length === 0) {
+      return { articles: [], debug: `RSS returned no items from: ${feedUrl}` };
     }
 
-    if (!data.results || data.results.length === 0) {
-      return { articles: [], debug: `NewsData returned no results for: q=${keyword}${params.category ? `, category=${params.category}` : ''}` };
-    }
+    // 最新3件を取得
+    const articles = feed.items.slice(0, 3).map(item => ({
+      title: item.title,
+      link: item.link,
+      pubDate: item.pubDate,
+      content: item.content,
+      contentSnippet: item.contentSnippet,
+      guid: item.guid,
+      categories: item.categories,
+    }));
 
-    return { articles: data.results, debug: `Found ${data.results.length} articles for: q=${keyword}${params.category ? `, category=${params.category}` : ''}` };
+    return {
+      articles,
+      debug: `Found ${articles.length} articles from nippon.com (${params.category || 'all'})`
+    };
   } catch (error) {
-    return { articles: [], debug: `Fetch error: ${error instanceof Error ? error.message : String(error)}` };
+    return {
+      articles: [],
+      debug: `RSS fetch error: ${error instanceof Error ? error.message : String(error)}`
+    };
   }
 };
 
 const processArticle = async (
-  article: NewsDataArticle,
+  article: RSSItem,
   model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>
 ): Promise<Neta | null> => {
   const prompt = `You are helping Japanese people discuss Japan-related news in English with foreigners. Given this news article about Japan, create a comprehensive conversation guide.
 
 Article Title: ${article.title}
-Description: ${article.description || 'No description available'}
+Description: ${article.contentSnippet || 'No description available'}
 
 Create a detailed guide in JSON format only (no markdown, no code blocks):
 {
@@ -135,11 +140,11 @@ Create a detailed guide in JSON format only (no markdown, no code blocks):
 
     const parsed = JSON.parse(jsonText);
     return {
-      id: article.article_id,
-      title: article.title,
-      sourceUrl: article.link,
-      publishedAt: article.pubDate,
-      category: parsed.category || article.category?.[0] || 'general',
+      id: article.guid || article.link || String(Date.now()),
+      title: article.title || 'Untitled',
+      sourceUrl: article.link || '',
+      publishedAt: article.pubDate || new Date().toISOString(),
+      category: parsed.category || 'general',
       difficulty: parsed.difficulty || 2,
       casualPhrases: parsed.casualPhrases || [],
       expandingQuestions: parsed.expandingQuestions || [],
@@ -158,7 +163,7 @@ Create a detailed guide in JSON format only (no markdown, no code blocks):
   }
 };
 
-const transformToNeta = async (articles: NewsDataArticle[]): Promise<{ netas: Neta[]; debug: string }> => {
+const transformToNeta = async (articles: RSSItem[]): Promise<{ netas: Neta[]; debug: string }> => {
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (!geminiApiKey) {
     return { netas: [], debug: 'GEMINI_API_KEY is not configured' };
@@ -189,12 +194,11 @@ export const handler: Handler = async (event) => {
   try {
     // クエリパラメータを取得
     const params: FetchParams = {
-      keyword: event.queryStringParameters?.q || undefined,
       category: event.queryStringParameters?.category || undefined,
     };
 
-    const newsResult = await fetchNews(params);
-    const netaResult = await transformToNeta(newsResult.articles);
+    const rssResult = await fetchFromRSS(params);
+    const netaResult = await transformToNeta(rssResult.articles);
 
     return {
       statusCode: 200,
@@ -205,7 +209,8 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({
         netas: netaResult.netas,
         debug: {
-          news: newsResult.debug,
+          source: 'nippon.com RSS',
+          news: rssResult.debug,
           transform: netaResult.debug,
           timestamp: new Date().toISOString(),
         }
