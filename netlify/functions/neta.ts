@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface NewsDataArticle {
   article_id: string;
@@ -49,31 +49,24 @@ const fetchNews = async (): Promise<{ articles: NewsDataArticle[]; debug: string
 };
 
 const transformToNeta = async (articles: NewsDataArticle[]): Promise<{ netas: Neta[]; debug: string }> => {
-  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicApiKey) {
-    return { netas: [], debug: 'ANTHROPIC_API_KEY is not configured' };
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) {
+    return { netas: [], debug: 'GEMINI_API_KEY is not configured' };
   }
 
   if (articles.length === 0) {
     return { netas: [], debug: 'No articles to transform' };
   }
 
-  const client = new Anthropic({
-    apiKey: anthropicApiKey,
-  });
+  const genAI = new GoogleGenerativeAI(geminiApiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
   const netas: Neta[] = [];
   const errors: string[] = [];
 
   for (const article of articles) {
     try {
-      const message = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: `You are helping Japanese English speakers discuss news in English. Given this news article, create a conversation guide.
+      const prompt = `You are helping Japanese English speakers discuss news in English. Given this news article, create a conversation guide.
 
 Article Title: ${article.title}
 Description: ${article.description || 'No description available'}
@@ -84,32 +77,30 @@ Respond in JSON format only (no markdown, no code blocks):
   "summary": "A 2-3 sentence summary in simple, conversational English that explains the news",
   "conversationStarters": ["3 natural ways to bring up this topic in conversation"],
   "keyPhrases": ["5-7 useful English phrases or vocabulary related to this topic"]
-}`,
-          },
-        ],
-      });
+}`;
 
-      const textContent = message.content.find((c) => c.type === 'text');
-      if (textContent && textContent.type === 'text') {
-        // Remove potential markdown code blocks
-        let jsonText = textContent.text.trim();
-        if (jsonText.startsWith('```')) {
-          jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-        }
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
 
-        const parsed = JSON.parse(jsonText);
-        netas.push({
-          id: article.article_id,
-          title: article.title,
-          titleJa: parsed.titleJa,
-          summary: parsed.summary,
-          conversationStarters: parsed.conversationStarters,
-          keyPhrases: parsed.keyPhrases,
-          category: article.category?.[0] || 'general',
-          sourceUrl: article.link,
-          publishedAt: article.pubDate,
-        });
+      // Remove potential markdown code blocks
+      let jsonText = text.trim();
+      if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
       }
+
+      const parsed = JSON.parse(jsonText);
+      netas.push({
+        id: article.article_id,
+        title: article.title,
+        titleJa: parsed.titleJa,
+        summary: parsed.summary,
+        conversationStarters: parsed.conversationStarters,
+        keyPhrases: parsed.keyPhrases,
+        category: article.category?.[0] || 'general',
+        sourceUrl: article.link,
+        publishedAt: article.pubDate,
+      });
     } catch (error) {
       errors.push(`${article.title}: ${error instanceof Error ? error.message : String(error)}`);
     }
