@@ -14,9 +14,6 @@ interface DebugInfo {
 // nippon.com カテゴリ
 const CATEGORIES = [
   { value: '', label: 'ニュース' },
-  { value: 'in-depth', label: '深掘り' },
-  { value: 'japan-data', label: '日本データ' },
-  { value: 'japan-topics', label: '日本トピックス' },
   { value: 'guide', label: 'Guide To Japan' },
   { value: 'video', label: 'Japan Video' },
 ];
@@ -86,7 +83,7 @@ export default function Home() {
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-white"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm bg-white text-gray-700"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat.value} value={cat.value}>
