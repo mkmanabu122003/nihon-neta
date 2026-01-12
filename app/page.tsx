@@ -4,20 +4,30 @@ import { useState, useEffect } from 'react';
 import NetaCard from '@/components/NetaCard';
 import { Neta } from '@/types/neta';
 
+interface DebugInfo {
+  news: string;
+  transform: string;
+  timestamp: string;
+}
+
 export default function Home() {
   const [netas, setNetas] = useState<Neta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [debug, setDebug] = useState<DebugInfo | null>(null);
 
   useEffect(() => {
     const fetchNetas = async () => {
       try {
         const response = await fetch('/api/neta');
-        if (!response.ok) {
-          throw new Error('Failed to fetch netas');
-        }
         const data = await response.json();
-        setNetas(data.netas);
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch netas');
+        }
+
+        setNetas(data.netas || []);
+        setDebug(data.debug || null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -83,7 +93,15 @@ export default function Home() {
               netas.map((neta) => <NetaCard key={neta.id} neta={neta} />)
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-500">No news available right now. Check back later!</p>
+                <p className="text-gray-500 mb-4">No news available right now. Check back later!</p>
+                {debug && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left text-sm">
+                    <p className="font-semibold text-yellow-800 mb-2">Debug Info:</p>
+                    <p className="text-yellow-700">News: {debug.news}</p>
+                    <p className="text-yellow-700">Transform: {debug.transform}</p>
+                    <p className="text-yellow-600 text-xs mt-2">Time: {debug.timestamp}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
