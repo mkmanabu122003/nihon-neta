@@ -35,6 +35,9 @@ interface Neta {
 // nippon.com RSSフィード
 const RSS_FEEDS: Record<string, { url: string; name: string }> = {
   '': { url: 'https://www.nippon.com/ja/rss-others/news.xml', name: 'nippon.com ニュース' },
+  'in-depth': { url: 'https://www.nippon.com/ja/rss-others/in-depth.xml', name: 'nippon.com 深掘り' },
+  'japan-data': { url: 'https://www.nippon.com/ja/rss-others/japan-data.xml', name: 'nippon.com 日本データ' },
+  'japan-topics': { url: 'https://www.nippon.com/ja/rss-others/japan-topics.xml', name: 'nippon.com 日本トピックス' },
   'guide': { url: 'https://www.nippon.com/ja/rss-others/guide-to-japan.xml', name: 'nippon.com Guide To Japan' },
   'video': { url: 'https://www.nippon.com/ja/rss-others/japan-video.xml', name: 'nippon.com Japan Video' },
 };

@@ -14,6 +14,9 @@ interface DebugInfo {
 // nippon.com カテゴリ
 const CATEGORIES = [
   { value: '', label: 'ニュース' },
+  { value: 'in-depth', label: '深掘り' },
+  { value: 'japan-data', label: '日本データ' },
+  { value: 'japan-topics', label: '日本トピックス' },
   { value: 'guide', label: 'Guide To Japan' },
   { value: 'video', label: 'Japan Video' },
 ];
