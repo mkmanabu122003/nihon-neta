@@ -30,14 +30,34 @@ interface Neta {
   relatedAreas: string[];
 }
 
-const fetchNews = async (): Promise<{ articles: NewsDataArticle[]; debug: string }> => {
+interface FetchParams {
+  keyword?: string;
+  category?: string;
+}
+
+const fetchNews = async (params: FetchParams): Promise<{ articles: NewsDataArticle[]; debug: string }> => {
   const apiKey = process.env.NEWSDATA_API_KEY;
   if (!apiKey) {
     return { articles: [], debug: 'NEWSDATA_API_KEY is not configured' };
   }
 
-  // 日本関連のニュースに絞り込み（3件に制限）
-  const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&q=Japan&language=en&size=3`;
+  // URLパラメータを構築
+  const urlParams = new URLSearchParams({
+    apikey: apiKey,
+    language: 'en',
+    size: '3',
+  });
+
+  // キーワード検索（デフォルトはJapan）
+  const keyword = params.keyword || 'Japan';
+  urlParams.append('q', keyword);
+
+  // カテゴリフィルター（NewsData.ioのカテゴリ）
+  if (params.category) {
+    urlParams.append('category', params.category);
+  }
+
+  const url = `https://newsdata.io/api/1/latest?${urlParams.toString()}`;
 
   try {
     const response = await fetch(url);
@@ -48,10 +68,10 @@ const fetchNews = async (): Promise<{ articles: NewsDataArticle[]; debug: string
     }
 
     if (!data.results || data.results.length === 0) {
-      return { articles: [], debug: `NewsData returned no results: ${JSON.stringify(data)}` };
+      return { articles: [], debug: `NewsData returned no results for: q=${keyword}${params.category ? `, category=${params.category}` : ''}` };
     }
 
-    return { articles: data.results, debug: `Found ${data.results.length} articles` };
+    return { articles: data.results, debug: `Found ${data.results.length} articles for: q=${keyword}${params.category ? `, category=${params.category}` : ''}` };
   } catch (error) {
     return { articles: [], debug: `Fetch error: ${error instanceof Error ? error.message : String(error)}` };
   }
@@ -165,9 +185,15 @@ const transformToNeta = async (articles: NewsDataArticle[]): Promise<{ netas: Ne
   };
 };
 
-export const handler: Handler = async () => {
+export const handler: Handler = async (event) => {
   try {
-    const newsResult = await fetchNews();
+    // クエリパラメータを取得
+    const params: FetchParams = {
+      keyword: event.queryStringParameters?.q || undefined,
+      category: event.queryStringParameters?.category || undefined,
+    };
+
+    const newsResult = await fetchNews(params);
     const netaResult = await transformToNeta(newsResult.articles);
 
     return {
