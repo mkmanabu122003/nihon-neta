@@ -28,7 +28,7 @@ const fetchNews = async (): Promise<{ articles: NewsDataArticle[]; debug: string
     return { articles: [], debug: 'NEWSDATA_API_KEY is not configured' };
   }
 
-  const url = `https://newsdata.io/api/1/news?apikey=${apiKey}&country=jp&language=en&size=5`;
+  const url = `https://newsdata.io/api/1/latest?apikey=${apiKey}&country=jp&language=en&size=5`;
 
   try {
     const response = await fetch(url);
